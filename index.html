@@ -203,6 +203,8 @@
     .yn-btn.na { background: #e2e8f0; border-color: #94a3b8; color: var(--text-main); }
     .file-info { margin-top: 6px; font-size: 12px; color: var(--text-muted); word-break: break-word; }
     .section-note { font-size: 12px; color: var(--text-muted); margin: -6px 0 12px; }
+    .conn-msg { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.4; background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
+    .conn-msg.error { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
     @media (max-width: 640px) { .card-head { flex-wrap: wrap; gap: 8px; } }
   
 </style>
@@ -224,6 +226,7 @@
 
   <!-- PASO 1: DATOS -->
   <div class="step active" id="step1">
+    <div class="conn-msg" id="conn-warning" hidden></div>
     <div class="card">
       <div class="card-head"><h3>Datos de la evaluación</h3></div>
       <div class="g2">
@@ -348,6 +351,7 @@
       <button type="button" class="email-btn" onclick="sendByEmail()"><i class="ti ti-mail"></i> Enviar por Email</button>
       <button type="button" class="drive-btn" id="drive-btn" onclick="sendToDrive()"><i class="ti ti-brand-google-drive"></i> Guardar en Google Drive</button>
     </div>
+    <div class="conn-msg error" id="drive-msg" hidden></div>
     <div class="dev-card" id="dev-doc"></div>
     <div class="actions" style="margin-top: 24px;">
       <button type="button" class="btn btn-secondary" onclick="go(2)"><i class="ti ti-arrow-left"></i> Editar Evaluación</button>
@@ -833,6 +837,7 @@ function buildDev() {
   dBtn.className = 'drive-btn';
   dBtn.innerHTML = '<i class="ti ti-brand-google-drive"></i> Guardar en Google Drive';
   dBtn.onclick = sendToDrive;
+  $('drive-msg').hidden = true;
 
   const critBars = TPL.crit.filter(c => E[c.k] === 'SI').map(c =>
     `<div class="err-bar" style="background:var(--color-danger-bg);border:1px solid var(--color-danger);color:var(--color-danger-text);padding:10px;border-radius:6px;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Error crítico: ${esc(c.l)} — Nota 0%</div>`).join('');
@@ -1029,12 +1034,34 @@ async function sendToDrive() {
     if (data.status !== 'success') throw new Error(data.message);
     btn.className = 'drive-btn success';
     btn.innerHTML = '<i class="ti ti-check"></i> ¡Guardado en Google Drive!';
+    $('drive-msg').hidden = true;
     dirty = false;
   } catch (err) {
     console.error(err);
     btn.className = 'drive-btn';
     btn.innerHTML = '<i class="ti ti-alert-triangle"></i> Reintentar guardado';
     btn.onclick = sendToDrive;
+    const msg = $('drive-msg');
+    msg.hidden = false;
+    msg.textContent = err instanceof TypeError
+      ? 'No se pudo conectar con Google Drive, por lo que la auditoría NO se guardó. Copiá la devolución o enviala por email y avisale a Luciano: hay que revisar la implementación del script (Ejecutar como: yo / Acceso: Cualquier persona).'
+      : 'El script de Drive respondió con un error y la auditoría NO se guardó: ' + (err.message || err);
+  }
+}
+
+/* Avisa apenas se abre la página si Drive no está disponible */
+async function probarConexion() {
+  if (SCRIPT_URL.startsWith('PEGAR_ACA')) return;
+  const w = $('conn-warning');
+  try {
+    const res = await fetch(SCRIPT_URL + '?ping=1');
+    const data = await res.json();
+    if (data.status !== 'success') throw new Error(data.message || 'respuesta inesperada');
+    w.hidden = true;
+  } catch (err) {
+    console.warn('Sin conexión con el script de Drive:', err);
+    w.hidden = false;
+    w.textContent = 'Guardar en Google Drive no está disponible ahora: Google no responde al script. Podés evaluar y usar "Copiar devolución" o "Enviar por Email" igual. Avisale a Luciano para revisar la implementación.';
   }
 }
 
@@ -1044,6 +1071,7 @@ async function sendToDrive() {
 document.addEventListener('DOMContentLoaded', function() {
   fillSelects();
   setTodayDate();
+  probarConexion();
   $('audio-llamada').addEventListener('change', showFiles);
   $('capturas').addEventListener('change', showFiles);
   document.querySelector('.container').addEventListener('input', markDirty);
