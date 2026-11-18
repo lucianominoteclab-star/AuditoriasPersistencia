@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditoría de Persistencia</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    :root {
+      --color-primary: #0f172a;
+      --color-primary-light: #1e293b;
+      --color-accent: #2563eb;
+      --color-bg: #f8fafc;
+      --color-card: #ffffff;
+      --text-main: #334155;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+      --border-color: #e2e8f0;
+      
+      --color-success: #10b981;
+      --color-success-bg: #ecfdf5;
+      --color-success-text: #065f46;
+      
+      --color-warning: #f59e0b;
+      --color-warning-bg: #fffbeb;
+      --color-warning-text: #92400e;
+      
+      --color-danger: #ef4444;
+      --color-danger-bg: #fef2f2;
+      --color-danger-text: #991b1b;
+      
+      --color-info: #3b82f6;
+      --color-info-bg: #eff6ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--color-bg); color: var(--text-main); padding: 20px; line-height: 1.5; }
+    
+    .container { max-width: 850px; margin: 0 auto; }
+    
+    header { margin-bottom: 24px; text-align: center; }
+    header h1 { font-size: 24px; color: var(--color-primary); font-weight: 700; }
+    header p { font-size: 14px; color: var(--text-muted); }
+
+    /* Barra de Progreso */
+    .prog-bar-wrap { background: #e2e8f0; border-radius: 99px; height: 8px; width: 100%; margin-bottom: 8px; overflow: hidden; }
+    .prog-bar { background: var(--color-accent); height: 100%; width: 33.3%; transition: width 0.3s ease; }
+    .step-lbl { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 20px; display: block; }
+
+    /* Pasos */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* Tarjetas y Formulario */
+    .card { background: var(--color-card); border-radius: 12px; border: 1px solid var(--border-color); padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+    .card-head h3 { font-size: 16px; color: var(--color-primary); }
+
+    .grid-2, .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .fw { grid-column: 1 / -1; }
+    
+    .field-label { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block; }
+    input[type="text"], input[type="date"], select, textarea, input[type="file"] {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; color: var(--text-main); outline: none; transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--color-accent); }
+    textarea { min-height: 80px; resize: vertical; }
+
+    /* Botones de calificación Tri-estado */
+    .rubric-row { padding: 12px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .rubric-row:last-child { border-bottom: none; }
+    .rubric-info { flex: 1; }
+    .rcheck-label { font-size: 14px; font-weight: 600; color: var(--color-primary); }
+    .rcheck-sub { font-size: 12px; color: var(--text-muted); }
+
+    .tri-btn-group { display: flex; gap: 4px; background: #f1f5f9; padding: 3px; border-radius: 6px; }
+    .tri-btn { border: none; background: transparent; padding: 6px 12px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
+    
+    .tri-btn.sel-si { background: var(--color-success); color: #fff; }
+    .tri-btn.sel-no { background: var(--color-danger); color: #fff; }
+    .tri-btn.sel-na { background: var(--text-muted); color: #fff; }
+
+    /* Botones Sí / No */
+    .yn-wrap { display: flex; gap: 6px; }
+    .yn-btn { border: 1px solid var(--border-color); background: #fff; padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted); }
+    .yn-btn.y { background: var(--color-success); color: #fff; border-color: var(--color-success); }
+    .yn-btn.n { background: var(--color-danger); color: #fff; border-color: var(--color-danger); }
+
+    .score-pill { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 14px; border-radius: 6px; margin-top: 10px; border: 1px solid var(--border-color); }
+    .score-pill-lbl { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .score-pill-val { font-size: 13px; font-weight: 700; color: var(--color-primary); }
+
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; display: inline-block; }
+    .b-ok { background: var(--color-success-bg); color: var(--color-success-text); }
+    .b-mid { background: var(--color-warning-bg); color: var(--color-warning-text); }
+    .b-no { background: var(--color-danger-bg); color: var(--color-danger-text); }
+    .b-neu { background: #f1f5f9; color: var(--text-muted); }
+    .b-info { background: var(--color-info-bg); color: var(--color-info); }
+
+    /* Acciones inferiores */
+    .actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
+    .btn { padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+    .btn-primary { background: var(--color-accent); color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: var(--text-main); }
+
+    /* Vista Devolución (Paso 3) */
+    .dev-card { background: #1e293b; color: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .dev-hbar { padding: 20px; background: #0f172a; border-bottom: 1px solid #334155; }
+    .dev-logo-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .dev-logo-txt { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; color: #94a3b8; text-transform: uppercase; }
+    .dev-asesor-row { display: flex; align-items: center; gap: 16px; }
+    .dev-av { width: 48px; height: 48px; border-radius: 50%; background: var(--color-accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; color: #fff; }
+    
+    .dev-body { padding: 20px; background: #1e293b; }
+    .dsec { margin-bottom: 20px; }
+    .dsec-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; letter-spacing: 0.5px; }
+    
+    .mrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .met { background: #0f172a; padding: 12px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
+    .met-val { font-size: 18px; font-weight: 700; color: #fff; }
+    .met-lbl { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+    .dattr { background: #0f172a; border-radius: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid #334155; }
+    .dattr-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .dattr-name { font-size: 13px; font-weight: 600; color: #f8fafc; }
+    .dattr-pct { font-size: 13px; font-weight: 700; }
+    .bar-bg { height: 6px; background: #334155; border-radius: 3px; flex: 1; margin: 0 12px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; }
+    
+    .cond-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .cond-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+    .cond-tag.ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .cond-tag.no { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .cond-tag.na { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    
+    .dattr-fb { font-size: 12px; color: #cbd5e1; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e293b; font-style: italic; }
+    .txt-blk { background: #0f172a; padding: 12px; border-radius: 8px; font-size: 13px; color: #cbd5e1; border: 1px solid #334155; white-space: pre-line; }
+    
+    .plan-li { font-size: 13px; color: #cbd5e1; margin-bottom: 4px; display: flex; gap: 6px; }
+
+    .op-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #334155; font-size: 12px; }
+    .op-row:last-child { border-bottom: none; }
+
+    .copy-btn, .drive-btn, .email-btn { cursor: pointer; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .copy-btn { background: #334155; color: #fff; }
+    .copy-btn.copied { background: var(--color-success); }
+    .drive-btn { background: #0284c7; color: #fff; }
+    .drive-btn.success { background: var(--color-success); }
+    .email-btn { background: #7c3aed; color: #fff; }
+
+    .animate-spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* ===== Navegación por pasos y secciones ===== */
+    .step-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+    .step-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .step-tab b { width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0; color: var(--text-main); font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+    .step-tab.active { border-color: var(--color-accent); background: var(--color-info-bg); color: var(--color-accent); }
+    .step-tab.active b { background: var(--color-accent); color: #fff; }
+
+    .sec-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; background: var(--color-bg); padding: 8px 0 10px; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); }
+    .nav-chips { display: flex; gap: 6px; flex: 1; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+    .nav-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 99px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .nav-chip .chip-n { font-weight: 700; color: var(--color-primary); }
+    .nav-chip .chip-t { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-chip.active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+    .nav-chip.active .chip-n { color: #fff; }
+    .nav-chip.done::after { content: "\2713"; color: var(--color-success); font-weight: 700; }
+    .nav-chip.active.done::after { color: #fff; }
+    .nav-sum { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+
+    .card { scroll-margin-top: 84px; }
+    .w-sec { font-size: 12px; color: var(--color-info); font-weight: 600; }
+    .w-chip { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--color-info-bg); color: var(--color-info); font-size: 11px; font-weight: 700; vertical-align: middle; }
+    .rubric-row.pending .rcheck-label::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--color-warning); vertical-align: middle; }
+
+    select:disabled { background: #f1f5f9; color: var(--text-muted); cursor: not-allowed; }
+    .dev-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .grid-2, .g2 { grid-template-columns: 1fr; }
+      .rubric-row { flex-direction: column; align-items: stretch; }
+      .tri-btn-group { width: 100%; }
+      .tri-btn { flex: 1; padding: 9px 6px; }
+      .op-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .op-row .yn-wrap { margin-left: 0 !important; }
+      .dev-asesor-row { flex-wrap: wrap; }
+      .actions { flex-wrap: wrap; }
+      .step-tab { font-size: 12px; padding: 8px 4px; }
+      .sec-nav { flex-direction: column; align-items: stretch; gap: 6px; }
+      .nav-sum { flex-direction: row; justify-content: space-between; align-items: center; }
+      .nav-chip .chip-t:not(.always) { display: none; }
+      .dev-toolbar { justify-content: stretch; }
+      .dev-toolbar > button { flex: 1 1 100%; justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  
+    .head-right { display: flex; align-items: center; gap: 8px; }
+    .mini-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border: 1px solid var(--border-color); background: #fff; color: var(--text-muted); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .mini-btn:hover { border-color: var(--color-success); color: var(--color-success); }
+    .yn-btn.na { background: #e2e8f0; border-color: #94a3b8; color: var(--text-main); }
+    .file-info { margin-top: 6px; font-size: 12px; color: var(--text-muted); word-break: break-word; }
+    .section-note { font-size: 12px; color: var(--text-muted); margin: -6px 0 12px; }
+    @media (max-width: 640px) { .card-head { flex-wrap: wrap; gap: 8px; } }
+  
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Auditoría de Persistencia</h1>
+    <p>Reinscripción y Seguimiento Académico</p>
+  </header>
+
+  <div class="prog-bar-wrap"><div class="prog-bar" id="prog"></div></div>
+  <nav class="step-tabs" aria-label="Pasos">
+    <button type="button" class="step-tab active" data-step="1" onclick="go(1)"><b>1</b> Datos</button>
+    <button type="button" class="step-tab" data-step="2" onclick="go(2)"><b>2</b> Evaluación</button>
+    <button type="button" class="step-tab" data-step="3" onclick="go(3)"><b>3</b> Devolución</button>
+  </nav>
+
+  <!-- PASO 1: DATOS -->
+  <div class="step active" id="step1">
+    <div class="card">
+      <div class="card-head"><h3>Datos de la evaluación</h3></div>
+      <div class="g2">
+        <div class="fw">
+          <label class="field-label" for="asesora">Asesora</label>
+          <select id="asesora"></select>
+        </div>
+        <div>
+          <label class="field-label" for="fecha">Fecha de evaluación</label>
+          <input type="date" id="fecha">
+        </div>
+        <div>
+          <label class="field-label" for="depto">Departamento</label>
+          <select id="depto"></select>
+        </div>
+        <div>
+          <label class="field-label" for="evaluador">Evaluador</label>
+          <select id="evaluador"></select>
+        </div>
+        <div>
+          <label class="field-label" for="plantilla">Tipo de plantilla</label>
+          <select id="plantilla"></select>
+        </div>
+        <div>
+          <label class="field-label" for="estado">Estado</label>
+          <select id="estado"></select>
+        </div>
+        <div>
+          <label class="field-label" for="cau">CAU</label>
+          <select id="cau"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Datos del alumno</h3></div>
+      <div class="g2">
+        <div>
+          <label class="field-label" for="alumno-nombre">Nombre y apellido</label>
+          <input type="text" id="alumno-nombre" placeholder="Nombre del alumno auditado">
+        </div>
+        <div>
+          <label class="field-label" for="alumno-dni">DNI / Legajo</label>
+          <input type="text" id="alumno-dni" placeholder="DNI o legajo">
+        </div>
+        <div class="fw">
+          <label class="field-label" for="audio-llamada">Adjuntar audio de llamada</label>
+          <input type="file" id="audio-llamada" accept="audio/*">
+          <div class="file-info" id="audio-info"></div>
+        </div>
+        <div class="fw">
+          <label class="field-label" for="capturas">Adjuntar capturas de la gestión</label>
+          <input type="file" id="capturas" accept="image/*" multiple>
+          <div class="file-info" id="capturas-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions" style="justify-content: flex-end;">
+      <button type="button" class="btn btn-primary" onclick="go(2)">Continuar a Evaluación <i class="ti ti-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- PASO 2: EVALUACIÓN -->
+  <div class="step" id="step2">
+    <div class="sec-nav" id="sec-nav">
+      <div class="nav-chips" id="nav-chips"></div>
+      <div class="nav-sum">
+        <span id="nav-prog">0/0 ítems marcados</span>
+        <span class="badge b-no" id="nav-score">0%</span>
+      </div>
+    </div>
+
+    <div class="card" id="card-crit">
+      <div class="card-head"><h3>Errores Críticos (Si alguno es "Sí", la nota final es 0%)</h3></div>
+      <div id="crit-rows"></div>
+    </div>
+
+    <h2 style="font-size: 16px; margin-bottom: 12px; color: var(--color-primary);" id="sec-title-attrs">Atributos Evaluados</h2>
+    <div id="attrs-container"></div>
+
+    <div class="card" id="card-ops">
+      <div class="card-head"><h3>Gestión de Procesos, Herramientas y Control Operativo</h3></div>
+      <div id="ops-rows"></div>
+    </div>
+
+    <div class="card" id="card-ctx">
+      <div class="card-head"><h3>Contexto Operativo (Excepciones e Incidencias)</h3></div>
+      <div id="ctx-rows"></div>
+      <div class="field-label" style="margin-top:14px">Observaciones de contexto</div>
+      <textarea id="ctx-obs" placeholder="Detallar observaciones de contexto..."></textarea>
+    </div>
+
+    <div class="card" id="card-dev">
+      <div class="card-head"><h3>Devolución Cualitativa y Plan de Acción</h3></div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <label class="field-label" for="fortalezas">💪 Fortalezas Identificadas</label>
+          <textarea id="fortalezas" placeholder="Aspectos positivos destacados en la gestión..."></textarea>
+        </div>
+        <div>
+          <label class="field-label" for="mejoras">🎯 Oportunidades de Mejora</label>
+          <textarea id="mejoras" placeholder="Puntos específicos a trabajar..."></textarea>
+        </div>
+        <div>
+          <label class="field-label" for="acciones">📌 Plan de Acción / Compromisos (Un compromiso por línea)</label>
+          <textarea id="acciones" placeholder="1. Consolidar mensajes en Dialektika&#10;2. Organizar el día revisando las métricas del CRM"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" onclick="go(1)"><i class="ti ti-arrow-left"></i> Volver</button>
+      <button type="button" class="btn btn-primary" onclick="go(3)">Generar Devolución <i class="ti ti-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- PASO 3: DEVOLUCIÓN -->
+  <div class="step" id="step3">
+    <div class="dev-toolbar">
+      <button type="button" class="copy-btn" id="copy-btn" onclick="copyDev()"><i class="ti ti-copy"></i> Copiar devolución</button>
+      <button type="button" class="email-btn" onclick="sendByEmail()"><i class="ti ti-mail"></i> Enviar por Email</button>
+      <button type="button" class="drive-btn" id="drive-btn" onclick="sendToDrive()"><i class="ti ti-brand-google-drive"></i> Guardar en Google Drive</button>
+    </div>
+    <div class="dev-card" id="dev-doc"></div>
+    <div class="actions" style="margin-top: 24px;">
+      <button type="button" class="btn btn-secondary" onclick="go(2)"><i class="ti ti-arrow-left"></i> Editar Evaluación</button>
+      <button type="button" class="btn btn-primary" onclick="newEval()"><i class="ti ti-plus"></i> Nueva Evaluación</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   CONFIGURACIÓN (editar acá)
+   ===================================================================== */
+const SCRIPT_URL = "PEGAR_ACA_LA_URL_DE_LA_APLICACION_WEB_DE_APPS_SCRIPT";
+
+const EVALUADORES = ['PAULA RUEDA', 'CAMILA MEDINA', 'LOURDES RODRIGUEZ', 'ROMINA MORALES'];
+const DEPARTAMENTOS = ['SIGLO', 'TECLAB'];
+const ESTADOS = ['GRAL', 'PC', 'NI', 'RECUPERO'];
+const CAUS = ['SMI02', 'DTC01', 'CLS01', 'SMT04', 'HLM01', 'MUN02', 'BFD02', 'TMP02', 'LDZ02'];
+
+/* Asesora -> email al que se envía la devolución */
+const ASESORAS = {
+  'CECILIA KAUFFMAN':   'cautp.cenedudes@gmail.com',
+  'GIULIANA GIULIANA':  'giuligiuliani2002@gmail.com',
+  'AGUSTINA MERA':      'causanmartin1887@gmail.com',
+  'MAGALI CASAS':       'infocenedudescls@gmail.com',
+  'LOURDES PEREYRA':    'infocenedudesmunro@gmail.com',
+  'MILAGROS PERALTA':   'navimi2003@gmail.com',
+  'NICOLE RIOS':        'riosdominiquenicole@gmail.com',
+  'MAITENA HEREDIA':    'infotorcuato@gmail.com',
+  'BRISA VARGAS':       'bvargassiglo21@gmail.com',
+  'ROMINA MONTENEGRO':  'rominamontenegroues21@gmail.com',
+  'MARIA LIÑARES':      'marialinaressiglo@gmail.com',
+  'CANDELA URBANO':     'siglo21candelau@gmail.com',
+  'AGUSTINA OLIVIERI':  'infobanfieldcenedudes2@gmail.com',
+  'MARIANELA RAC':      'infolomascenedudes@gmail.com',
+  'CANDELA NUÑEZ':      'siglo21candelanunez@gmail.com'
+};
+
+/* Plantillas (tomadas de PLANTILLAS_PARA_AUDITORIAS.xlsx).
+   Cada sección tiene un peso (%) y cada ítem un peso dentro de ella: si el ítem no trae "w",
+   la sección reparte su peso en partes iguales. Las secciones 1-4 suman 100%. */
+const PLANTILLAS = {"reinscripcion": {"nombre": "Reinscripción", "crit": [{"k": "respeto", "l": "Falta de Respeto/Trato inadecuado", "s": "Trato inadecuado, insultos o agresión verbal al alumno."}, {"k": "falsa", "l": "RI Fraudulenta/Información Falsa", "s": "Prometer condiciones inexistentes o engañar deliberadamente."}], "secs": [{"k": "p1", "l": "1. Uso de plataformas (CRM, Omnileads y Dialektika)", "weight": 25, "conds": [{"id": "A", "l": "Dialektika: Mensaje consolidado", "s": "Saludo, estado de cursada y desarrollo de la consulta en un único bloque. No gasta msjs extras."}, {"id": "B", "l": "Dialektika y Omnileads: Autonomía y Pre-chequeo", "s": "Revisa sistemas internos y legajo; no solicita datos que ya posee (DNI/materia)."}, {"id": "C", "l": "Omnileads: Volumen de llamados", "s": "Cantidad de llamados acorde a objetivos (teniendo en cuenta excepciones de imposibilidad). 30 llamados diarios."}, {"id": "D", "l": "CRM: Tipificación correcta", "s": "Estado y subestado correctos, coinciden con el comentario."}, {"id": "E", "l": "CRM: Recomendación de materias", "s": "Correctamente asentada en CRM."}, {"id": "F", "l": "CRM: Interacciones", "s": "Deja detallado en comentarios lo que se habló con el alumno, si hubo intentos de contacto y la respuesta o no respuesta que tuvo."}, {"id": "G", "l": "CRM: Próximo contacto", "s": "Hace uso de fecha de próximo contacto y la cumple."}]}, {"k": "p2", "l": "2. Indagación y Empatía Comercial", "weight": 20, "conds": [{"id": "A", "l": "Consultar cómo quiere cursar", "s": "Indaga disponibilidad y preferencia de cursada antes de bajar directo de 6 a 3 materias."}, {"id": "B", "l": "Validar emociones y dificultades", "s": "Escucha activa y empatía ante dificultades económicas o trabas del alumno."}, {"id": "C", "l": "Información de inicio de RI", "s": "Asegura que el alumno reciba la info con los mayores beneficios de reinscripción."}, {"id": "D", "l": "Indagación de medios de pago", "s": "Consulta sobre la tarjeta o banco que utiliza habitualmente el alumno."}, {"id": "E", "l": "Indagación sobre otros descuentos (empresa amiga, monotributo, etc.)", "s": "Pregunta sobre posibles descuentos corporativos o convenios para aplicar."}]}, {"k": "p3", "l": "3. Bajada de Oferta y Aranceles", "weight": 25, "conds": [{"id": "A", "l": "Encuadre financiero sin asustar", "s": "Explica precio, paquete que abona, opciones de pago (mat+tka/tkdif) y diferencias con período anterior sin alarmar."}, {"id": "B", "l": "Recomendación de materias ok", "s": "Explica con claridad las materias sugeridas y el porqué de la recomendación."}, {"id": "C", "l": "Explicación de cuotas y recos", "s": "Detalla claridad sobre descuentos comerciales, adicionales y cuotas."}, {"id": "D", "l": "Ofrecimiento de pago semestral/bimestral/matrícula", "s": "Ofrece alternativas de pago y combinaciones de medios de pago."}]}, {"k": "p4", "l": "4. Objeción, Cierre y Recontacto", "weight": 30, "conds": [{"id": "A", "l": "Rebate de objeciones: Precio/Valor", "s": "Explica precio y hace hincapié en que el descuento actual es muy alto y conviene aprovecharlo ahora.", "w": 3.75}, {"id": "B", "l": "Rebate de objeciones: Argumento de ahorro y comparación", "s": "Explica por qué es beneficioso abonar ahora comparando con lo abonado anteriormente y el ahorro con descuentos aplicados.", "w": 3.75}, {"id": "C", "l": "Rebate de objeciones: Ofrecer otros medios de pago", "s": "Brinda alternativas de pago viables cuando el alumno no dispone de tarjeta.", "w": 3.75}, {"id": "D", "l": "Rebate de objeciones: Ofrecer arancel A", "s": "Ofrece alternativas de cursada/arancel A cuando no puede abonar el paquete completo.", "w": 3.75}, {"id": "E", "l": "Pactar recontacto clave", "s": "Agenda fecha y hora específica de seguimiento, especialmente para fechas críticas como cierre de tarjeta o finalización de cuotas.", "w": 5.0}, {"id": "F", "l": "No dejar que el alumno maneje la llamada", "s": "Mantiene la calma y ofrece opciones con seguridad aunque el alumno sea seco o difícil. Siempre lleva el control.", "w": 5.0}, {"id": "G", "l": "Cierre", "s": "Intenta que el alumno abone lo antes posible para evitar dilatar el pago. Pregunta si quiere abonar hoy y envía el link de pago si es necesario.", "w": 5.0}]}], "ops": [{"k": "o1", "l": "¿Se cerró la RI en la gestión?", "s": "Logró concretar la reinscripción (pago/matrícula) durante el contacto auditado.", "opts": ["SI", "NO"]}, {"k": "o2", "l": "¿Logró combinar RI con Académicos?", "s": "Aprovechó el llamado de RI para realizar seguimiento académico (TPs, parciales, regularidad) y viceversa.", "opts": ["SI", "NO"]}, {"k": "o3", "l": "¿Utiliza correctamente las métricas y apartados del CRM (Retención y Persistencia)?", "s": "Analiza Mi Reinscripción, Proyección (General/1ra Cohorte), Objetivo Mes a Mes, CMA, Proyección Académica, Pendientes de entrega/rendir y Alumnos en libre por nota para priorizar y organizar su día.", "opts": ["SI", "NO", "NA"]}, {"k": "o4", "l": "¿Utiliza correctamente las herramientas propias de Siglo 21 (BC y La Nube)?", "s": "Consulta y aplica Base de Conocimiento (BC) y La Nube para validar normativas, aranceles, procesos y comunicados vigentes.", "opts": ["SI", "NO", "NA"]}, {"k": "o5", "l": "¿Cumple con las tareas diarias y campañas en tiempo y forma?", "s": "Gestiona en plazo las campañas asignadas en HubSpot y respeta los bloques horarios establecidos para RI y Seguimiento Académico.", "opts": ["SI", "NO", "NA"]}], "ctx": [{"k": "c1", "l": "¿Tuvo imposibilidad de llamar por temas del CAU (internet/ruido)?"}, {"k": "c2", "l": "¿Tuvo asignaciones especiales que ocupan tiempo de asesoramiento (OpenClass/Pre21/Exámenes)?"}], "ctxNote": "Detallar aquí observaciones de contexto: cortes de internet o ruido en el CAU que impidieron llamar, participación en OpenClass, Pre21, mesas de examen, licencias u otras situaciones particulares a destacar."}, "academicos": {"nombre": "Seguimiento académico", "crit": [{"k": "respeto", "l": "Falta de Respeto/Trato inadecuado", "s": "Trato inadecuado, insultos o agresión verbal al alumno."}, {"k": "falsa", "l": "Información Académica Falsa/Negligencia Grave", "s": "Brindar fechas, correlatividades o condiciones de aprobación erróneas que perjudiquen la cursada."}], "secs": [{"k": "p1", "l": "1. Uso de plataformas (CRM, Omnileads y Dialektika)", "weight": 20, "conds": [{"id": "A", "l": "Dialektika: Mensaje consolidado", "s": "Saludo, estado de cursada y desarrollo de la consulta en un único bloque. No gasta msjs extras.", "w": 3.0}, {"id": "B", "l": "Dialektika y Omnileads: Autonomía y Pre-chequeo", "s": "Revisa portal del alumno, CRM y legajo antes de contactar; no solicita datos que ya posee (DNI, materia o condición).", "w": 3.0}, {"id": "C", "l": "Omnileads: Frecuencia y prioridad de llamados", "s": "Mantiene frecuencia de llamados acorde a objetivos, dando prioridad a NI, PC y alumnos críticos", "w": 5.0}, {"id": "D", "l": "CRM: Recomendación de materias", "s": "Sugerencia académica y correlatividades correctamente asentadas en CRM.", "w": 3.0}, {"id": "E", "l": "CRM: Interacciones y seguimiento", "s": "Deja detallado en comentarios lo hablado con el alumno, intentos de contacto, respuesta y no respuesta, estado de TPs/parciales.", "w": 3.0}, {"id": "F", "l": "CRM: Próximo contacto", "s": "Hace uso de fecha de próximo contacto en agenda para seguimiento académico y la cumple.", "w": 3.0}]}, {"k": "p2", "l": "2. Indagación y Empatía Académica", "weight": 25, "conds": [{"id": "A", "l": "Indagar situación y tiempos de cursada", "s": "Consulta disponibilidad horaria, ritmo de estudio y preferencias antes de recomendar carga de materias o estrategias."}, {"id": "B", "l": "Validar emociones y dificultades académicas", "s": "Escucha activa, contención y empatía ante frustraciones, nervios de examen, desaprobados o falta de tiempo."}, {"id": "C", "l": "Detección temprana de riesgos de abandono", "s": "Identifica alertas (materias libres por nota, TPs vencidos, baja actividad en campus) para intervenir a tiempo."}, {"id": "D", "l": "Indagación integral de cursada (Checklist NI/Avance)", "s": "En alumnos nuevos (NI/PC) o en curso, verifica ingreso al portal, materiales y comprensión de modalidad (ED/Home)."}]}, {"k": "p3", "l": "3. Acompañamiento en Vencimientos, Parciales y Simuladores", "weight": 25, "conds": [{"id": "A", "l": "Recordatorios oportunos de vencimientos de TPs", "s": "Anticipa y recuerda con tiempo las fechas límite de entrega de Trabajos Prácticos (TP 1 a TP 4), evitando demoras en la entrega."}, {"id": "B", "l": "Acompañamiento e inscripción a parciales", "s": "Informa plazos, recuerda la inscripción a Parcial 1 y Parcial 2 en fecha y verifica que tenga turno/fecha asignada."}, {"id": "C", "l": "Insistencia activa con simuladores", "s": "Promueve el uso de simuladores previos al examen para asegurar la aprobación."}, {"id": "D", "l": "Seguimiento de regularidad, promoción y rehacer MEC", "s": "Explica con claridad condiciones para promocionar/regularizar e insiste en rehacer MEC o instancias pendientes."}]}, {"k": "p4", "l": "4. Liderazgo de Gestión, Cierre y Recontacto Académico", "weight": 30, "conds": [{"id": "A", "l": "Rebate de objeciones y motivación para continuar", "s": "Supera excusas de falta de tiempo o desánimo reforzando el valor de avanzar y no perder la regularidad de cursada."}, {"id": "B", "l": "Brindar herramientas de la universidad", "s": "Ofrecer talleres, gabinete de bienestar, encuentros con directores de carrera y tutores virtuales para que el alumno se reincorpore a la cursada o avance, según la situación particular."}, {"id": "C", "l": "Guiar al alumno cuando está equivocado con su cursada", "s": "Acompañarlo paso a paso para que entienda dónde está la confusión (en el portal o reglamento) con buena predisposición, aunque el alumno esté enojado. No darle la razón solo para evitar conflictos."}, {"id": "D", "l": "Pactar recontacto académico clave", "s": "Agenda día y hora específica de seguimiento (post-entrega de TP, post-parcial o cierre de módulo) sin esperar que vuelva solo."}, {"id": "E", "l": "Cierre con acción concreta en portal", "s": "Finaliza la gestión verificando que el alumno sepa exactamente qué paso realizar hoy en campus (hacer o rehacer TP, inscripción a parcial o simulador)."}]}], "ops": [{"k": "o1", "l": "¿Se resolvió o encauzó la gestión académica del alumno?", "s": "Logró que el alumno regularice su situación, confirme inscripción a parcial, entregue TP o despeje su consulta en el contacto.", "opts": ["SI", "NO"]}, {"k": "o2", "l": "¿Logró combinar Seguimiento Académico con RI?", "s": "Aprovechó el llamado o chat académico para indagar estado de reinscripción/pagos y viceversa.", "opts": ["SI", "NO"]}, {"k": "o3", "l": "¿Utiliza correctamente las métricas y apartados del CRM (Retención y Persistencia)?", "s": "Analiza CMA (materias aprobadas por alumno), Proyección Académica (promoción/regularidad/libre por nota), Pendientes de entrega/rendir (TP 1-4 sin hacer, parciales sin fecha o no rendidos) y Alumnos en libre por nota para organizar su día.", "opts": ["SI", "NO", "NA"]}, {"k": "o4", "l": "¿Utiliza correctamente las herramientas propias de Siglo 21 (BC y La Nube)?", "s": "Consulta y aplica Base de Conocimiento (BC) y La Nube para validar reglamentos académicos, calendario de exámenes, correlatividades y procesos vigentes.", "opts": ["SI", "NO", "NA"]}, {"k": "o5", "l": "¿Cumple con las tareas diarias y campañas en tiempo y forma?", "s": "Envía en plazo los recordatorios semanales de vencimientos de TPs e inscripciones a parciales, gestiona campañas de HubSpot y respeta los horarios asignados para Académicos y RI.", "opts": ["SI", "NO", "NA"]}], "ctx": [{"k": "c1", "l": "¿Tuvo imposibilidad de llamar por temas del CAU (internet/ruido)?"}, {"k": "c2", "l": "¿Tuvo asignaciones especiales que ocupan tiempo de asesoramiento (OpenClass/Pre21/Exámenes presenciales)?"}], "ctxNote": "Detallar aquí observaciones de contexto: cortes de internet o ruido en el CAU que impidieron llamar, participación en OpenClass, Pre21, mesas de examen, licencias u otras situaciones particulares a destacar..."}};
+
+Object.entries(PLANTILLAS).forEach(([id, t]) => {
+  const suma = t.secs.reduce((acc, s) => acc + s.weight, 0);
+  if (suma !== 100) console.warn(`La plantilla "${id}" suma ${suma}% (debería sumar 100%)`);
+  t.secs.forEach(s => {
+    if (s.conds.some(c => c.w !== undefined)) {
+      const sc = s.conds.reduce((acc, c) => acc + c.w, 0);
+      if (Math.abs(sc - s.weight) > 0.01) console.warn(`"${id}" ${s.k}: los ítems suman ${sc}% y la sección ${s.weight}%`);
+    }
+  });
+});
+
+/* =====================================================================
+   ESTADO
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+let ATTRS = [];
+let TPL = null, TPL_ID = null, builtSig = null;
+let currentStep = 1;
+let dirty = false;
+const checks = {}, touched = {};
+const E = {};      // errores críticos
+const OPV = {};    // procesos (Sí/No/N/A)
+const CTX = {};    // contexto operativo (Sí/No)
+let textReportCache = "";
+
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const fmt = n => Number(n.toFixed(2)).toLocaleString('es-AR');
+const markDirty = () => { dirty = true; };
+const VAL = {SI:'Sí', NO:'No', NA:'N/A'};
+
+function setTodayDate() {
+  const d = new Date();
+  $('fecha').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function initials(n) { if (!n) return '?'; return n.trim().split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(); }
+function svgRing(pct, color) {
+  const r = 26, circ = 2 * Math.PI * r, dash = Math.round((pct / 100) * circ);
+  return `<svg width="64" height="64" viewBox="0 0 64 64" style="transform:rotate(-90deg)"><circle cx="32" cy="32" r="${r}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="5"/><circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/></svg>`;
+}
+const opt = (v, t) => `<option value="${esc(v)}">${esc(t ?? v)}</option>`;
+
+/* =====================================================================
+   PASO 1: DATOS
+   ===================================================================== */
+function fillSelects() {
+  const fill = (id, arr) => { $(id).innerHTML = '<option value="">-- Seleccionar --</option>' + arr.map(v => opt(v)).join(''); };
+  fill('asesora', Object.keys(ASESORAS));
+  fill('depto', DEPARTAMENTOS);
+  fill('evaluador', EVALUADORES);
+  fill('estado', ESTADOS);
+  fill('cau', CAUS);
+  $('plantilla').innerHTML = '<option value="">-- Seleccionar --</option>' +
+    Object.entries(PLANTILLAS).map(([id, t]) => opt(id, t.nombre.toUpperCase())).join('');
+}
+
+function showFiles() {
+  const audio = $('audio-llamada').files[0];
+  const caps = Array.from($('capturas').files);
+  $('audio-info').textContent = audio ? `${audio.name} (${(audio.size / 1048576).toFixed(1)} MB)` : '';
+  $('capturas-info').textContent = caps.length ? `${caps.length} captura(s): ${caps.map(f => f.name).join(', ')}` : '';
+}
+
+function currentSig() { return $('plantilla').value; }
+
+function validarPaso1() {
+  const req = [['asesora', 'la asesora'], ['depto', 'el departamento'], ['evaluador', 'el evaluador'],
+               ['plantilla', 'el tipo de plantilla'], ['estado', 'el estado'], ['cau', 'el CAU']];
+  const faltan = req.filter(([id]) => !$(id).value).map(([, t]) => t);
+  if (faltan.length) { alert('Falta seleccionar: ' + faltan.join(', ') + '.'); return false; }
+  return true;
+}
+
+/* =====================================================================
+   MOTOR DE PUNTAJE (igual que admisiones)
+   ===================================================================== */
+function initChecks() {
+  [checks, touched, E, OPV, CTX].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+  ATTRS.forEach(a => {
+    checks[a.k] = {}; touched[a.k] = {};
+    a.conds.forEach(c => { checks[a.k][c.id] = 'NO'; touched[a.k][c.id] = false; });
+  });
+}
+const itemW = (a, c) => c.w ?? a.weight / a.conds.length;
+
+function rawScore(k) {
+  const a = ATTRS.find(x => x.k === k);
+  if (!a) return 0;
+  let ganado = 0, evaluable = 0;
+  a.conds.forEach(c => {
+    const v = checks[k][c.id];
+    if (v === 'NA') return;
+    const w = itemW(a, c);
+    evaluable += w;
+    if (v === 'SI') ganado += w;
+  });
+  return evaluable <= 0 ? 100 : (ganado / evaluable) * 100;
+}
+const getScore = k => Math.round(rawScore(k));
+
+function getStats(k) {
+  const a = ATTRS.find(x => x.k === k);
+  let si = 0, no = 0, na = 0;
+  a.conds.forEach(c => { const v = checks[k][c.id]; if (v === 'SI') si++; else if (v === 'NA') na++; else no++; });
+  return {si, no, na, total: a.conds.length};
+}
+const untouchedCount = () => ATTRS.reduce((n, a) => n + a.conds.filter(c => !touched[a.k][c.id]).length, 0);
+const totalItems = () => ATTRS.reduce((n, a) => n + a.conds.length, 0);
+
+function computeResult() {
+  const hasCrit = !!TPL && TPL.crit.some(c => E[c.k] === 'SI');
+  let suma = 0, peso = 0;
+  ATTRS.forEach(a => {
+    const st = getStats(a.k);
+    if (st.si + st.no > 0) { suma += rawScore(a.k) * a.weight; peso += a.weight; }
+  });
+  const nota = peso > 0 ? Math.round(suma / peso) : 100;
+  const final = hasCrit ? 0 : nota;
+  return {
+    hasCrit, nota, final,
+    estadoTxt: final >= 70 ? 'Aprobado' : final >= 40 ? 'En desarrollo' : 'No cumple',
+    estadoCls: final >= 70 ? 'b-ok' : final >= 40 ? 'b-mid' : 'b-no',
+    ringColor: final >= 70 ? '#10b981' : final >= 40 ? '#f59e0b' : '#ef4444'
+  };
+}
+
+/* =====================================================================
+   PASO 2: CONSTRUCCIÓN
+   ===================================================================== */
+function paintTri(k, cid) {
+  const g = $(`tri-${k}-${cid}`);
+  if (!g) return;
+  const st = checks[k][cid], tc = touched[k][cid];
+  const set = (sel, cls, on) => { const b = g.querySelector(sel); b.className = `tri-btn ${sel.slice(1)}` + (on ? ' ' + cls : ''); b.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+  set('.btn-si', 'sel-si', tc && st === 'SI');
+  set('.btn-no', 'sel-no', tc && st === 'NO');
+  set('.btn-na', 'sel-na', tc && st === 'NA');
+  g.closest('.rubric-row').classList.toggle('pending', !tc);
+}
+
+function setCheckState(k, cid, state) {
+  checks[k][cid] = state; touched[k][cid] = true;
+  paintTri(k, cid); updateUI(k); updateSummary(); markDirty();
+}
+
+function marcarTodoCumple(k) {
+  const a = ATTRS.find(x => x.k === k);
+  a.conds.forEach(c => { checks[k][c.id] = 'SI'; touched[k][c.id] = true; paintTri(k, c.id); });
+  updateUI(k); updateSummary(); markDirty();
+}
+
+function updateUI(k) {
+  const a = ATTRS.find(x => x.k === k);
+  if (!a) return;
+  const score = getScore(k), st = getStats(k);
+  const badge = $('sc-' + k);
+  if (badge) { badge.textContent = score + '%'; badge.className = 'badge ' + (score >= 70 ? 'b-ok' : score >= 40 ? 'b-mid' : 'b-no'); }
+  const sp = $('sp-' + k);
+  if (sp) sp.textContent = `${score}% (${st.si} cumplen, ${st.no} no cumplen${st.na > 0 ? `, ${st.na} N/A` : ''}) · aporta ${fmt(rawScore(k) / 100 * a.weight)} de ${fmt(a.weight)} pts`;
+}
+
+const ynRow = (kind, key, label, sub, opts) => `
+  <div class="rubric-row">
+    <div class="rubric-info">
+      <div class="rcheck-label">${esc(label)}</div>
+      ${sub ? `<div class="rcheck-sub">${esc(sub)}</div>` : ''}
+    </div>
+    <div class="yn-wrap" data-kind="${kind}" data-key="${key}">
+      ${opts.map(o => `<button type="button" class="yn-btn" aria-pressed="false" onclick="setYN('${kind}','${key}','${o}',this)">${VAL[o]}</button>`).join('')}
+    </div>
+  </div>`;
+
+function setYN(kind, key, v, btn) {
+  const store = kind === 'crit' ? E : kind === 'ops' ? OPV : CTX;
+  store[key] = v;
+  const cls = v === 'SI' ? (kind === 'crit' ? 'n' : 'y') : v === 'NO' ? (kind === 'crit' ? 'y' : 'n') : 'na';
+  btn.closest('.yn-wrap').querySelectorAll('.yn-btn').forEach(b => { b.className = 'yn-btn'; b.setAttribute('aria-pressed', 'false'); });
+  btn.classList.add(cls); btn.setAttribute('aria-pressed', 'true');
+  markDirty(); updateSummary();
+}
+
+function buildForm() {
+  $('crit-rows').innerHTML = TPL.crit.map(c => ynRow('crit', c.k, c.l, c.s, ['SI', 'NO'])).join('');
+  $('sec-title-attrs').textContent = `Atributos evaluados — ${TPL.nombre}`;
+
+  $('attrs-container').innerHTML = ATTRS.map(a => `
+    <div class="card" id="card-${a.k}">
+      <div class="card-head">
+        <h3>${esc(a.l)} <span class="w-sec">[Peso: ${fmt(a.weight)}%]</span></h3>
+        <div class="head-right">
+          <button type="button" class="mini-btn" onclick="marcarTodoCumple('${a.k}')" title="Marca todos los ítems de esta sección como Cumple"><i class="ti ti-checks"></i> Todo cumple</button>
+          <span class="badge b-no" id="sc-${a.k}">0%</span>
+        </div>
+      </div>
+      <div>
+        ${a.conds.map(c => `
+          <div class="rubric-row pending">
+            <div class="rubric-info">
+              <div class="rcheck-label">${esc(c.l)} <span class="w-chip" title="Peso del ítem dentro de la evaluación">${fmt(itemW(a, c))}%</span></div>
+              <div class="rcheck-sub">${esc(c.s)}</div>
+            </div>
+            <div class="tri-btn-group" id="tri-${a.k}-${c.id}">
+              <button type="button" class="tri-btn btn-si" aria-pressed="false" onclick="setCheckState('${a.k}','${c.id}','SI')">Cumple</button>
+              <button type="button" class="tri-btn btn-no" aria-pressed="false" onclick="setCheckState('${a.k}','${c.id}','NO')">No cumple</button>
+              <button type="button" class="tri-btn btn-na" aria-pressed="false" onclick="setCheckState('${a.k}','${c.id}','NA')">N/A</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="score-pill"><span class="score-pill-lbl">Resultado del bloque</span><span class="score-pill-val" id="sp-${a.k}"></span></div>
+      <div class="field-label" style="margin-top:14px">Observaciones específicas del bloque</div>
+      <textarea id="fb-${a.k}" placeholder="Detalles u observaciones de este bloque..."></textarea>
+    </div>`).join('');
+
+  $('ops-rows').innerHTML = TPL.ops.map(o => ynRow('ops', o.k, o.l, o.s, o.opts)).join('');
+  $('ctx-rows').innerHTML = TPL.ctx.map(c => ynRow('ctx', c.k, c.l, '', ['SI', 'NO'])).join('');
+  $('ctx-obs').value = '';
+  $('ctx-obs').placeholder = TPL.ctxNote;
+
+  ATTRS.forEach(a => { a.conds.forEach(c => paintTri(a.k, c.id)); updateUI(a.k); });
+}
+
+function construir() {
+  TPL_ID = $('plantilla').value;
+  TPL = PLANTILLAS[TPL_ID];
+  ATTRS = TPL.secs;
+  initChecks();
+  buildForm();
+  buildNav();
+  updateSummary();
+  builtSig = currentSig();
+}
+
+function hasBlockData() {
+  const marcas = ATTRS.some(a => a.conds.some(c => touched[a.k]?.[c.id]));
+  const obs = ATTRS.some(a => ($('fb-' + a.k)?.value || '').trim() !== '');
+  const otros = Object.keys(E).length + Object.keys(OPV).length + Object.keys(CTX).length > 0 || $('ctx-obs').value.trim() !== '';
+  return marcas || obs || otros;
+}
+
+/* =====================================================================
+   NAVEGACIÓN ENTRE SECCIONES
+   ===================================================================== */
+function buildNav() {
+  const chips = [{t: 'crit', n: '', txt: 'Críticos', always: true}];
+  ATTRS.forEach(a => chips.push({t: a.k, n: a.l.match(/^(\d+)/)[1], txt: a.l.replace(/^\d+\.\s*/, ''), always: false}));
+  chips.push({t: 'ops', n: '', txt: 'Procesos', always: true}, {t: 'ctx', n: '', txt: 'Contexto', always: true}, {t: 'dev', n: '', txt: 'Devolución', always: true});
+  $('nav-chips').innerHTML = chips.map(c => `
+    <button type="button" class="nav-chip" data-t="${c.t}" data-target="card-${c.t}" title="${esc(c.txt)}" onclick="irA('card-${c.t}')">
+      ${c.n ? `<span class="chip-n">${esc(c.n)}</span>` : ''}<span class="chip-t${c.always ? ' always' : ''}">${esc(c.txt)}</span>
+    </button>`).join('');
+  refreshNavState();
+}
+
+function irA(id) {
+  const el = $(id);
+  if (!el) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'start'});
+}
+
+function refreshNavState() {
+  if (!TPL) return;
+  document.querySelectorAll('#nav-chips .nav-chip').forEach(ch => {
+    const t = ch.dataset.t;
+    let done = false;
+    if (t === 'crit') done = TPL.crit.every(c => E[c.k]);
+    else if (t === 'ops') done = TPL.ops.every(o => OPV[o.k]);
+    else if (t === 'ctx') done = TPL.ctx.every(c => CTX[c.k]);
+    else if (t !== 'dev' && touched[t]) done = ATTRS.find(a => a.k === t).conds.every(c => touched[t][c.id]);
+    ch.classList.toggle('done', done);
+  });
+}
+
+function updateSummary() {
+  const total = totalItems(), marcados = total - untouchedCount();
+  const r = computeResult();
+  if ($('nav-prog')) $('nav-prog').textContent = `${marcados}/${total} ítems marcados`;
+  if ($('nav-score')) { $('nav-score').textContent = r.final + '%'; $('nav-score').className = 'badge ' + r.estadoCls; }
+  refreshNavState();
+}
+
+let spyBusy = false;
+function spy() {
+  if (spyBusy || currentStep !== 2) return;
+  spyBusy = true;
+  requestAnimationFrame(() => {
+    spyBusy = false;
+    let activo = null;
+    const chips = document.querySelectorAll('#nav-chips .nav-chip');
+    chips.forEach(ch => { const el = $(ch.dataset.target); if (el && el.getBoundingClientRect().top <= 140) activo = ch; });
+    chips.forEach(ch => ch.classList.toggle('active', ch === activo));
+    const cont = $('nav-chips');
+    if (activo && cont) cont.scrollLeft = activo.offsetLeft - cont.clientWidth / 2 + activo.clientWidth / 2;
+  });
+}
+
+/* =====================================================================
+   PASOS
+   ===================================================================== */
+function showStep(n) {
+  currentStep = n;
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  $('step' + n).classList.add('active');
+  document.querySelectorAll('.step-tab').forEach(t => {
+    const on = Number(t.dataset.step) === n;
+    t.classList.toggle('active', on);
+    if (on) t.setAttribute('aria-current', 'step'); else t.removeAttribute('aria-current');
+  });
+  $('prog').style.width = (n * 33.3) + '%';
+  if (n === 3) buildDev();
+  if (n === 2) spy();
+  window.scrollTo(0, 0);
+}
+
+function go(n) {
+  if (n === 1) { showStep(1); return; }
+  if (!validarPaso1()) { if (currentStep !== 1) showStep(1); return; }
+
+  // Solo se reconstruye si cambió la plantilla; si no, se conserva todo lo marcado y escrito
+  if (currentSig() !== builtSig) {
+    if (builtSig !== null && hasBlockData() &&
+        !confirm('Cambiaste el tipo de plantilla. Lo ya cargado en la evaluación (ítems, procesos, contexto y observaciones) se va a reiniciar. ¿Continuar?')) {
+      return;
+    }
+    construir();
+  }
+
+  if (n === 3 && currentStep !== 3) {
+    const sin = untouchedCount();
+    if (sin > 0 && !confirm(`Quedan ${sin} ítem(s) sin marcar. Se van a contar como "No cumple". ¿Generar la devolución igual?`)) {
+      showStep(2);
+      return;
+    }
+  }
+  showStep(n);
+}
+
+function newEval() {
+  if (dirty && !confirm('Vas a empezar una evaluación nueva. Lo cargado en esta se va a borrar (asegurate de haberla guardado o enviado). ¿Continuar?')) return;
+  resetForm();
+  showStep(1);
+}
+
+function resetForm() {
+  // Se conservan el evaluador y la plantilla porque lo habitual es auditar varias gestiones seguidas
+  ['asesora', 'depto', 'estado', 'cau'].forEach(id => { $(id).value = ''; });
+  ['alumno-nombre', 'alumno-dni'].forEach(id => { $(id).value = ''; });
+  $('audio-llamada').value = ''; $('capturas').value = '';
+  showFiles();
+  setTodayDate();
+
+  [checks, touched, E, OPV, CTX].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+  ATTRS = []; TPL = null; TPL_ID = null; builtSig = null;
+  $('attrs-container').innerHTML = ''; $('crit-rows').innerHTML = ''; $('ops-rows').innerHTML = ''; $('ctx-rows').innerHTML = '';
+  $('nav-chips').innerHTML = ''; $('ctx-obs').value = '';
+  ['fortalezas', 'mejoras', 'acciones'].forEach(id => { $(id).value = ''; });
+  textReportCache = '';
+  dirty = false;
+}
+
+/* =====================================================================
+   DEVOLUCIÓN (vista) Y REPORTE DE TEXTO
+   ===================================================================== */
+function cabecera() {
+  const fechaRaw = $('fecha').value;
+  return {
+    asesora: $('asesora').value,
+    fecha: fechaRaw,
+    fechaFmt: fechaRaw ? new Date(fechaRaw + 'T00:00:00').toLocaleDateString('es-AR', {day: '2-digit', month: '2-digit', year: 'numeric'}) : '—',
+    depto: $('depto').value || '—',
+    evaluador: $('evaluador').value || '—',
+    estado: $('estado').value || '—',
+    cau: $('cau').value || '—',
+    alumno: $('alumno-nombre').value.trim() || '—',
+    dni: $('alumno-dni').value.trim() || '—'
+  };
+}
+
+function generateTextReport() {
+  const h = cabecera();
+  const r = computeResult();
+  const fortalezas = $('fortalezas').value, mejoras = $('mejoras').value, acciones = $('acciones').value;
+  const nAudio = $('audio-llamada').files.length, nCaps = $('capturas').files.length;
+  const blocks = [];
+
+  blocks.push(
+    `📋 EVALUACIÓN DE CALIDAD — PERSISTENCIA (${TPL.nombre.toUpperCase()})\r\n` +
+    `Asesora: ${h.asesora}\r\n` +
+    `Fecha: ${h.fechaFmt}\r\n` +
+    `Departamento: ${h.depto}\r\n` +
+    `Evaluador: ${h.evaluador}\r\n` +
+    `Estado: ${h.estado}\r\n` +
+    `CAU: ${h.cau}\r\n` +
+    `Alumno: ${h.alumno}${h.dni !== '—' ? ' (' + h.dni + ')' : ''}\r\n` +
+    `Adjuntos: ${nAudio ? 'audio de la llamada' : 'sin audio'} · ${nCaps} captura(s)`
+  );
+
+  const critTxt = TPL.crit.filter(c => E[c.k] === 'SI').map(c => `⚠️ ERROR CRÍTICO: ${c.l} — Nota 0%`);
+  if (critTxt.length) blocks.push(critTxt.join('\r\n'));
+
+  let condsText = `🔹 CRITERIOS EVALUADOS:\r\n`;
+  ATTRS.forEach(a => {
+    const score = getScore(a.k);
+    const icon = score >= 70 ? '🟢' : score >= 40 ? '🟡' : '🔴';
+    condsText += `\r\n▶ ${a.l.toUpperCase()} [${fmt(a.weight)}%] — ${icon} ${score}%\r\n`;
+    a.conds.forEach(c => {
+      const v = checks[a.k][c.id];
+      condsText += `${v === 'SI' ? '✅' : v === 'NA' ? '⚪' : '❌'} ${c.l}\r\n`;
+    });
+    const fb = $('fb-' + a.k)?.value;
+    if (fb) condsText += `💬 Observación: ${fb}\r\n`;
+  });
+  blocks.push(condsText.trim());
+
+  blocks.push(`📊 RESULTADO FINAL:\r\nPuntaje: ${r.final}%\r\nObjetivo de Calidad: 70%\r\nEstado: ${r.estadoTxt}`);
+
+  const mark = v => v ? VAL[v] : '—';
+  blocks.push(`⚙️ GESTIÓN DE PROCESOS, HERRAMIENTAS Y CONTROL OPERATIVO:\r\n` +
+    TPL.ops.map(o => `• ${o.l} ${mark(OPV[o.k])}`).join('\r\n'));
+
+  const obs = $('ctx-obs').value.trim();
+  blocks.push(`⚠️ CONTEXTO OPERATIVO:\r\n` +
+    TPL.ctx.map(c => `• ${c.l} ${mark(CTX[c.k])}`).join('\r\n') + (obs ? `\r\nObservaciones: ${obs}` : ''));
+
+  if (fortalezas) blocks.push(`💪 FORTALEZAS IDENTIFICADAS:\r\n${fortalezas}`);
+  if (mejoras) blocks.push(`🎯 OPORTUNIDADES DE MEJORA:\r\n${mejoras}`);
+  if (acciones) blocks.push(`📌 PLAN DE ACCIÓN / COMPROMISOS:\r\n` +
+    acciones.split('\n').filter(l => l.trim()).map((l, i) => `${i + 1}. ${l.replace(/^\d+[.)]\s*/, '')}`).join('\r\n'));
+
+  textReportCache = blocks.join('\r\n\r\n------------------------------------------\r\n\r\n');
+}
+
+function buildDev() {
+  const h = cabecera();
+  const r = computeResult();
+
+  const dBtn = $('drive-btn');
+  dBtn.className = 'drive-btn';
+  dBtn.innerHTML = '<i class="ti ti-brand-google-drive"></i> Guardar en Google Drive';
+  dBtn.onclick = sendToDrive;
+
+  const critBars = TPL.crit.filter(c => E[c.k] === 'SI').map(c =>
+    `<div class="err-bar" style="background:var(--color-danger-bg);border:1px solid var(--color-danger);color:var(--color-danger-text);padding:10px;border-radius:6px;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> Error crítico: ${esc(c.l)} — Nota 0%</div>`).join('');
+
+  const attrRows = ATTRS.map(a => {
+    const score = getScore(a.k);
+    const barColor = score >= 70 ? 'var(--color-success)' : score >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
+    const fb = $('fb-' + a.k)?.value || '';
+    const tags = a.conds.map(c => {
+      const v = checks[a.k][c.id];
+      const cls = v === 'SI' ? 'ok' : v === 'NA' ? 'na' : 'no';
+      return `<span class="cond-tag ${cls}">${esc((v === 'SI' ? '✓ ' : v === 'NA' ? 'N/A ' : '✗ ') + c.l)}</span>`;
+    }).join('');
+    return `<div class="dattr">
+      <div class="dattr-top">
+        <span class="dattr-name">${esc(a.l)} <small style="color:var(--text-light)">(${fmt(a.weight)}%)</small></span>
+        <div class="bar-bg"><div class="bar-fill" style="width:${score}%;background:${barColor}"></div></div>
+        <span class="dattr-pct" style="color:${barColor}">${score}%</span>
+      </div>
+      <div class="cond-grid">${tags}</div>
+      ${fb ? `<div class="dattr-fb">${esc(fb)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const badge = v => v === 'SI' ? '<span class="badge b-ok">Sí</span>' : v === 'NO' ? '<span class="badge b-no">No</span>' : v === 'NA' ? '<span class="badge b-neu">N/A</span>' : '<span class="badge b-neu">—</span>';
+  const opsRows = TPL.ops.map(o => `<div class="op-row"><span style="color:var(--text-main);font-weight:500">${esc(o.l)}</span>${badge(OPV[o.k])}</div>`).join('');
+  const ctxRows = TPL.ctx.map(c => `<div class="op-row"><span style="color:var(--text-main);font-weight:500">${esc(c.l)}</span>${badge(CTX[c.k])}</div>`).join('');
+  const ctxObs = $('ctx-obs').value.trim();
+
+  const fortalezas = $('fortalezas').value, mejoras = $('mejoras').value, acciones = $('acciones').value;
+  const nCaps = $('capturas').files.length;
+
+  $('dev-doc').innerHTML = `
+    <div class="dev-hbar">
+      <div class="dev-logo-row"><span class="dev-logo-txt">Reporte de Calidad — Persistencia</span><span class="badge b-info">${esc(TPL.nombre)}</span></div>
+      <div class="dev-asesor-row">
+        <div class="dev-av">${esc(initials(h.asesora))}</div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:2px">${esc(h.asesora)}</div>
+          <div style="font-size:13px;color:var(--text-light)">${esc(h.depto)} · CAU ${esc(h.cau)} · Estado ${esc(h.estado)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px"><i class="ti ti-calendar"></i> ${h.fechaFmt} · <i class="ti ti-user-check"></i> Auditado por ${esc(h.evaluador)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px"><i class="ti ti-school"></i> Alumno: ${esc(h.alumno)}${h.dni !== '—' ? ' (' + esc(h.dni) + ')' : ''}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="position:relative;width:64px;height:64px">
+            ${svgRing(r.final, r.ringColor)}
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="font-size:14px;font-weight:700;color:#fff">${r.final}%</span></div>
+          </div>
+          <span class="badge ${r.estadoCls}">${r.estadoTxt}</span>
+        </div>
+      </div>
+    </div>
+    <div class="dev-body">
+      ${critBars ? `<div style="margin-bottom:1.5rem">${critBars}</div>` : ''}
+      <div class="dsec">
+        <div class="dsec-title">Métricas de Desempeño</div>
+        <div class="mrow">
+          <div class="met"><div class="met-val">${r.final}%</div><div class="met-lbl">Puntaje</div></div>
+          <div class="met"><div class="met-val">70%</div><div class="met-lbl">Objetivo de Calidad</div></div>
+          <div class="met"><div class="met-val" style="display:flex;justify-content:center;align-items:center;height:28px;"><span class="badge ${r.estadoCls}">${r.estadoTxt}</span></div><div class="met-lbl">Definición</div></div>
+        </div>
+      </div>
+      <div class="dsec"><div class="dsec-title">Criterios Evaluados</div>${attrRows}</div>
+      ${fortalezas ? `<div class="dsec"><div class="dsec-title">Fortalezas Identificadas</div><div class="txt-blk">${esc(fortalezas)}</div></div>` : ''}
+      ${mejoras ? `<div class="dsec"><div class="dsec-title">Oportunidades de Mejora</div><div class="txt-blk">${esc(mejoras)}</div></div>` : ''}
+      ${acciones ? `<div class="dsec"><div class="dsec-title">Plan de Acción / Compromisos</div>${acciones.split('\n').filter(l => l.trim()).map((l, i) => `<div class="plan-li"><b>${i + 1}.</b> <span>${esc(l.replace(/^\d+[.)]\s*/, ''))}</span></div>`).join('')}</div>` : ''}
+      <div class="dsec"><div class="dsec-title">Gestión de Procesos, Herramientas y Control Operativo</div>${opsRows}</div>
+      <div class="dsec"><div class="dsec-title">Contexto Operativo</div>${ctxRows}${ctxObs ? `<div class="txt-blk" style="margin-top:8px">${esc(ctxObs)}</div>` : ''}</div>
+      <div class="dsec"><div class="dsec-title">Adjuntos</div><div class="txt-blk">${$('audio-llamada').files.length ? 'Audio de la llamada adjunto' : 'Sin audio'} · ${nCaps} captura(s) de la gestión</div></div>
+    </div>`;
+
+  generateTextReport();
+}
+
+/* =====================================================================
+   EXPORTACIÓN: COPIAR, EMAIL, GOOGLE DRIVE
+   ===================================================================== */
+function copyDev() {
+  const clone = $('dev-doc').cloneNode(true);
+  const container = document.createElement('div');
+  container.style.position = 'absolute'; container.style.left = '-9999px';
+  container.appendChild(clone);
+  document.body.appendChild(container);
+  const range = document.createRange();
+  range.selectNodeContents(container);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+  try {
+    document.execCommand('copy');
+    const btn = $('copy-btn');
+    btn.className = 'copy-btn copied';
+    btn.innerHTML = '<i class="ti ti-check"></i> ¡Formato copiado!';
+    dirty = false;
+    setTimeout(() => { btn.className = 'copy-btn'; btn.innerHTML = '<i class="ti ti-copy"></i> Copiar devolución'; }, 2500);
+  } catch (err) {
+    console.error('Error al copiar formato:', err);
+  } finally {
+    sel.removeAllRanges();
+    document.body.removeChild(container);
+  }
+}
+
+function sendByEmail() {
+  const h = cabecera();
+  const to = ASESORAS[h.asesora] || '';
+  const subject = encodeURIComponent(`Devolución de Auditoría de Calidad — ${h.asesora} (${h.fechaFmt})`);
+  const abrir = () => { window.location.href = `mailto:${encodeURIComponent(to)}?subject=${subject}`; };
+  if (!to) alert('No tengo el email de esta asesora; el correo se abrirá sin destinatario.');
+  navigator.clipboard.writeText(textReportCache).then(() => {
+    dirty = false;
+    alert(`El reporte se copió al portapapeles. Se abrirá el correo para ${h.asesora}${to ? ' (' + to + ')' : ''}; solo tenés que pegar (Ctrl + V) el contenido en el cuerpo del mail.`);
+    abrir();
+  }).catch(err => { console.error('Error al copiar texto: ', err); abrir(); });
+}
+
+function readBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+/* Reduce las capturas (máx. 1600 px, JPG) para que el envío sea liviano; si falla, manda el original */
+async function prepararCaptura(file, i) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const esc1 = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(bmp.width * esc1); cv.height = Math.round(bmp.height * esc1);
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    const data = cv.toDataURL('image/jpeg', 0.8).split(',')[1];
+    return {name: `captura_${i + 1}.jpg`, mime: 'image/jpeg', data};
+  } catch (e) {
+    return {name: `captura_${i + 1}_${file.name}`, mime: file.type || 'image/png', data: await readBase64(file)};
+  }
+}
+
+function buildDatos() {
+  const h = cabecera();
+  const r = computeResult();
+  const bloques = ATTRS.map(a => getScore(a.k));
+  const comp = $('acciones').value.split('\n').map(l => l.trim().replace(/^\d+[.)]\s*/, '')).filter(Boolean);
+  const mark = v => v || '—';
+  return {
+    departamento: h.depto, evaluador: h.evaluador, estadoAlumno: h.estado, cau: h.cau,
+    alumno: h.alumno, dni: h.dni,
+    notaFinal: r.final, puntajeTecnico: r.nota, estadoGeneral: r.estadoTxt,
+    respetoCritico: E.respeto === 'SI' ? 'SI' : 'NO',
+    falsaCritico: E.falsa === 'SI' ? 'SI' : 'NO',
+    bloques,
+    fortalezas: $('fortalezas').value.trim() || '—',
+    mejoras: $('mejoras').value.trim() || '—',
+    compromisos: comp,
+    ops: TPL.ops.map(o => mark(OPV[o.k])),
+    ctx: TPL.ctx.map(c => mark(CTX[c.k])),
+    ctxObs: $('ctx-obs').value.trim() || '—'
+  };
+}
+
+async function sendToDrive() {
+  const btn = $('drive-btn');
+  if (SCRIPT_URL.startsWith('PEGAR_ACA')) {
+    alert('Falta configurar la URL de Apps Script (constante SCRIPT_URL al inicio del código de la página).');
+    return;
+  }
+  btn.innerHTML = '<i class="ti ti-loader animate-spin"></i> Guardando datos...';
+  btn.onclick = null;
+  try {
+    const h = cabecera();
+    const audioFile = $('audio-llamada').files[0];
+    const capFiles = Array.from($('capturas').files);
+
+    const audio = audioFile ? {name: audioFile.name, mime: audioFile.type || 'audio/mpeg', data: await readBase64(audioFile)} : null;
+    const capturas = [];
+    for (let i = 0; i < capFiles.length; i++) capturas.push(await prepararCaptura(capFiles[i], i));
+
+    const bytes = (audio ? audio.data.length : 0) + capturas.reduce((n, c) => n + c.data.length, 0);
+    if (bytes > 35 * 1048576 && !confirm('Los adjuntos pesan bastante y el envío podría fallar. ¿Intentar igual?')) {
+      btn.className = 'drive-btn'; btn.innerHTML = '<i class="ti ti-brand-google-drive"></i> Guardar en Google Drive'; btn.onclick = sendToDrive;
+      return;
+    }
+
+    const payload = {
+      asesora: h.asesora, fecha: h.fecha, plantillaId: TPL_ID, plantilla: TPL.nombre,
+      emailAsesora: ASESORAS[h.asesora] || '',
+      reporteTexto: textReportCache,
+      datos: buildDatos(),
+      audio, capturas
+    };
+    const res = await fetch(SCRIPT_URL, {method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    if (data.status !== 'success') throw new Error(data.message);
+    btn.className = 'drive-btn success';
+    btn.innerHTML = '<i class="ti ti-check"></i> ¡Guardado en Google Drive!';
+    dirty = false;
+  } catch (err) {
+    console.error(err);
+    btn.className = 'drive-btn';
+    btn.innerHTML = '<i class="ti ti-alert-triangle"></i> Reintentar guardado';
+    btn.onclick = sendToDrive;
+  }
+}
+
+/* =====================================================================
+   INICIO
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', function() {
+  fillSelects();
+  setTodayDate();
+  $('audio-llamada').addEventListener('change', showFiles);
+  $('capturas').addEventListener('change', showFiles);
+  document.querySelector('.container').addEventListener('input', markDirty);
+  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('scroll', spy, {passive: true});
+});
+
+</script>
+</body>
+</html>
